@@ -21,16 +21,16 @@ WINDOW_HEIGHT = 200
 PADDLE_WIDTH = 5
 PADDLE_HEIGHT = 30
 #distance from the edge of the window
-PADDLE_BUFFER = 10
+PADDLE_BUFFER = 5
 
 #size of our ball
 BALL_WIDTH = 5
 BALL_HEIGHT = 5
 
 #speeds of our paddle and ball
-PADDLE_SPEED = 2
+PADDLE_SPEED = 3
 BALL_X_SPEED = 3
-BALL_Y_SPEED = 2
+BALL_Y_SPEED = 3
 
 #RGB colors for our paddle and ball
 WHITE = (255, 255, 255)
