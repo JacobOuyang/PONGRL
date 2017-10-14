@@ -162,13 +162,12 @@ def trainGraph(inp, out, sess):
             inp_t1_batch = []
             for i in range(len(minibatch)):
                 for j in range(len(minibatch[i])):
-                    inp_batch.append(minibatch[i][j])
-                    argmax_batch.append(minibatch[i][j])
-                    reward_batch.append(minibatch[i][j])
-                    inp_t1_batch.append(minibatch[i][j])
+                    inp_batch.append(minibatch[i][j][0])
+                    argmax_batch.append(minibatch[i][j][1])
+                    reward_batch.append(minibatch[i][j][2])
+                    inp_t1_batch.append(minibatch[i][j][3])
 
 
-        
             gt_batch = []
             out_batch = out.eval(feed_dict={inp: inp_t1_batch})
             
