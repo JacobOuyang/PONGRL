@@ -16,11 +16,8 @@ FINAL_EPSILON = 0.05
 EXPLORE = 20
 OBSERVE = 10
 # store our experiences, the size of it
-REPLAY_MEMORY = 100
+REPLAY_MEMORY = 800
 # batch size to train on
-BATCH = 5
-LENINITIAL = 0
-LENNOW = 0
 
 # create tensorflow graph
 def createGraph():
@@ -70,9 +67,10 @@ def trainGraph(inp, out, sess):
     gt = tf.placeholder("float", [None])  # ground truth
 
     # action
-    action = tf.reduce_sum(tf.multiply(out, argmax), reduction_indices=1)
+    prob = tf.nn.softmax(out)
+    action = tf.reduce_sum(tf.multiply(prob, argmax), reduction_indices=1)
     # cost function we will reduce through backpropagation
-    cost = tf.reduce_mean(tf.square(action - gt))
+    cost = tf.reduce_mean(tf.multiply(action, gt)) #tf.square(action - gt))
     # optimization fucntion to reduce our minimize our cost function
     train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
@@ -103,19 +101,20 @@ def trainGraph(inp, out, sess):
     # training time
     while (1):
         # output tensor
-        out_t = out.eval(feed_dict={inp: [inp_t]})[0]
+        prob_eval, out_eval = sess.run([prob, out], feed_dict={inp: [inp_t]})
+        prob_t = prob_eval[0]
+        out_t = out_eval[0]
         # argmax function
         argmax_t = np.zeros([ACTIONS])
 
         #
-        if (random.random() <= epsilon):
+        maxIndex = np.argmax(out_t[0])
+        if (random.random() > prob_t[maxIndex]):
             maxIndex = random.randrange(ACTIONS)
-        else:
-            maxIndex = np.argmax(out_t)
+
         argmax_t[maxIndex] = 1
 
-        if epsilon > FINAL_EPSILON:
-            epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
+
 
         # reward tensor if score is positive
         reward_t, frame = game.getNextFrame(argmax_t)
@@ -125,61 +124,72 @@ def trainGraph(inp, out, sess):
         frame = np.reshape(frame, (84, 84, 1))
         # new input tensor
         inp_t1 = np.append(frame, inp_t[:, :, 0:3], axis=2)
-
+        win_count = 0
         # add our input tensor, argmax tensor, reward and updated input tensor tos tack of experiences
         if (reward_t == 0):
-            Point.append((inp_t, argmax_t, reward_t, inp_t1))
-        else:
 
-            framearray = np.empty(shape=(len(Point) + 1), dtype=object)
-            for i in range(len(Point) + 1):
-                if (i == 0):
-                    framearray[i] = (inp_t, argmax_t, reward_t, inp_t1)
+            Point.append([inp_t, argmax_t, reward_t, inp_t1])
+            if (len(Point) > 300):
+                Point.popleft()
+        else:
+            reward_array = np.zeros(shape=[len(Point) +1])
+            #filling values in the reward array
+            for i in reversed(xrange(0, len(Point)+1)):
+                if (i == len(Point)):
+                    Point.append([inp_t, argmax_t, reward_t, inp_t1])
+
+                    reward_array[i] = reward_t
+
+
+
                 else:
-                    temp = Point.pop()
-                    framearray[i] = temp
-            D.append(framearray)
-            LENNOW +=1
+
+                    reward_array[i] = reward_array[i+1] * GAMMA + reward_array[i]
+            #adding reward array values back into frames and putting them into frame queue
+            reward_array -= np.mean(reward_array)
+            reward_array /= np.std(reward_array)
+
+            print("how long did the point last?     ", len(Point))
+            for i in range(len(reward_array)):
+                QueueTransfer = Point.popleft()
+                QueueTransfer[2] = reward_array[i]
+                D.append(QueueTransfer)
+            if reward_t == 1:
+                win_count += 1
+
 
         # if we run out of replay memory, make room
-        if len(D) > REPLAY_MEMORY:
-            D.popleft()
+        if (len(D) > REPLAY_MEMORY):
+            for i in range(0, len(D) - REPLAY_MEMORY):
+                D.popleft()
 
         # training iteration
-        if LENNOW > LENINITIAL:
-            LENINITIAL = LENNOW
+        if (len(D) ==REPLAY_MEMORY):
             print("training")
-            if (BATCH > len(D)):
-                currentBATCH = len(D)
 
-            else:
-                currentBATCH = BATCH
 
             # get values from our replay memory
-            minibatch = random.sample(D, currentBATCH)
+            np.random.shuffle(D)
             inp_batch = []
             argmax_batch = []
             reward_batch = []
             inp_t1_batch = []
-            for i in range(len(minibatch)):
-                for j in range(len(minibatch[i])):
-                    inp_batch.append(minibatch[i][j][0])
-                    argmax_batch.append(minibatch[i][j][1])
-                    reward_batch.append(minibatch[i][j][2])
-                    inp_t1_batch.append(minibatch[i][j][3])
+            for i in range(len(D)):
+                temp = D.pop()
+                inp_batch.append(temp[0])
+                argmax_batch.append(temp[1])
+                reward_batch.append(temp[2])
+                inp_t1_batch.append(temp[3])
 
-            gt_batch = []
-            out_batch = out.eval(feed_dict={inp: inp_t1_batch})
-            counter = 0
-            # add values to our batch
-            for i in range(0, len(minibatch)):
-                for j in range(0, len(minibatch[i])):
-                    gt_batch.append(reward_batch[counter] + GAMMA * np.max(out_batch[counter]))
-                    counter +=1
+
+            c1, a1, o1 = sess.run([cost, action, out],
+                                  feed_dict={gt: [reward_batch[-1]],
+                                             argmax: [argmax_batch[-1]],
+                                             inp: [inp_batch[-1]]})
 
             # train on that
             train_step.run(feed_dict={
-                gt: gt_batch,
+                gt: reward_batch,
                 argmax: argmax_batch,
                 inp: inp_batch
             })
@@ -193,7 +203,7 @@ def trainGraph(inp, out, sess):
             saver.save(sess, './' + 'pong' + '-dqn', global_step=t)
 
         print(
-        "TIMESTEP", t, "/ EPSILON", epsilon, "/ ACTION", maxIndex, "/ REWARD", reward_t, "/ Q_MAX %e" % np.max(out_t))
+        "TIMESTEP", t, "/ ACTION", maxIndex, "/ REWARD", reward_t, "/ Wins ", win_count, "/ Q_MAX %e" % np.max(out_t))
 
 
 def main():
