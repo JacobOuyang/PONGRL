@@ -29,8 +29,8 @@ BALL_HEIGHT = 5
 
 #speeds of our paddle and ball
 PADDLE_SPEED = 3
-BALL_X_SPEED = 3
-BALL_Y_SPEED = 3
+BALL_X_SPEED = 2
+BALL_Y_SPEED = 2
 
 #RGB colors for our paddle and ball
 WHITE = (255, 255, 255)
@@ -156,6 +156,7 @@ class PongGame:
         #starting point
         self.ballXPos = WINDOW_WIDTH/2 - BALL_WIDTH/2
 
+
         #randomly decide where the ball will move
         if(0 < num < 3):
             self.ballXDirection = 1
@@ -194,6 +195,7 @@ class PongGame:
 
     #update our screen
     def getNextFrame(self, action):
+
         pygame.event.pump()
         score = 0
         screen.fill(BLACK)
@@ -214,5 +216,34 @@ class PongGame:
         #record the total score
         self.tally = self.tally + score
         print "Tally is " + str(self.tally)
+        if (score != 0):
+            num = random.randint(0, 9)
+            # initialie positions of paddle
+            self.paddle1YPos = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT / 2
+            self.paddle2YPos = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT / 2
+            # and ball direction
+            self.ballXDirection = 1
+            self.ballYDirection = 1
+            # starting point
+            self.ballXPos = WINDOW_WIDTH / 2 - BALL_WIDTH / 2
+
+            # randomly decide where the ball will move
+            if (0 < num < 3):
+                self.ballXDirection = 1
+                self.ballYDirection = 1
+            if (3 <= num < 5):
+                self.ballXDirection = -1
+                self.ballYDirection = 1
+            if (5 <= num < 8):
+                self.ballXDirection = 1
+                self.ballYDirection = -1
+            if (8 <= num < 10):
+                self.ballXDirection = -1
+                self.ballYDirection = -1
+            # new random number
+            num = random.randint(0, 9)
+            # where it will start, y part
+            self.ballYPos = num * (WINDOW_HEIGHT - BALL_HEIGHT) / 9
+            print("RESSETING")
         #return the score and the surface data
         return [score, image_data]
