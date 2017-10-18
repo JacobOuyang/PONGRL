@@ -13,8 +13,8 @@ GAMMA = 0.99
 INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.05
 # how many frames to anneal epsilon
-EXPLORE = 20
-OBSERVE = 10
+EXPLORE = 500000
+OBSERVE = 50000
 # store our experiences, the size of it
 REPLAY_MEMORY = 800
 # batch size to train on
@@ -60,8 +60,7 @@ def createGraph():
 # deep q network. feed in pixel data to graph session
 def trainGraph(inp, out, sess):
     game = pong.PongGame()
-    global LENNOW
-    global LENINITIAL
+
     # to calculate the argmax, we multiply the predicted output with a vector with one value 1 and rest as 0
     argmax = tf.placeholder("float", [None, ACTIONS])
     gt = tf.placeholder("float", [None])  # ground truth
@@ -108,13 +107,20 @@ def trainGraph(inp, out, sess):
         argmax_t = np.zeros([ACTIONS])
 
         #
-        maxIndex = np.argmax(out_t[0])
-        if (random.random() > prob_t[maxIndex]):
-            maxIndex = random.randrange(ACTIONS)
+   #     maxIndex = np.argmax(out_t[0])
+ #       if (random.random() > prob_t[maxIndex]):
+#            maxIndex = random.randrange(ACTIONS)
 
+    #    argmax_t[maxIndex] = 1
+
+        if (random.random() <= epsilon):
+            maxIndex = random.randrange(ACTIONS)
+        else:
+            maxIndex = np.argmax(out_t)
         argmax_t[maxIndex] = 1
 
-
+        if epsilon > FINAL_EPSILON:
+            epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
         # reward tensor if score is positive
         reward_t, frame = game.getNextFrame(argmax_t)
@@ -203,7 +209,7 @@ def trainGraph(inp, out, sess):
             saver.save(sess, './' + 'pong' + '-dqn', global_step=t)
 
         print(
-        "TIMESTEP", t, "/ ACTION", maxIndex, "/ REWARD", reward_t, "/ Wins ", win_count, "/ Q_MAX %e" % np.max(out_t))
+        "TIMESTEP", t, "/ ACTION", maxIndex, "Epsilon', ", epsilon, "/ REWARD", reward_t, "/ Wins ", win_count, "/ Q_MAX %e" % np.max(out_t))
 
 
 def main():
