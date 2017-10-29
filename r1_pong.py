@@ -5,7 +5,7 @@ import numpy as np
 import gym
 import tensorflow as tf
 
-MAX_MEMORY_SIZE = 10000
+MAX_MEMORY_SIZE = 2000
 # hyperparameters
 n_obs = 80 * 80  # dimensionality of observations
 h = 200  # number of hidden layer neurons
@@ -32,6 +32,13 @@ with tf.variable_scope('layer_one', reuse=False):
 with tf.variable_scope('layer_two', reuse=False):
     xavier_l2 = tf.truncated_normal_initializer(mean=0, stddev=1. / np.sqrt(h), dtype=tf.float32)
     tf_model['W2'] = tf.get_variable("W2", [h, n_actions], initializer=xavier_l2)
+def discount_rewards(rewardarray):
+    rewardarray.reverse()
+    for i in range(len(rewardarray) -1):
+        if (rewardarray[i]!= 0 and rewardarray[i+1] ==0):
+            rewardarray[i+1] = rewardarray[i] * gamma
+    rewardarray.reverse()
+    return rewardarray
 
 
 # tf operations
@@ -67,16 +74,19 @@ tf_y = tf.placeholder(dtype=tf.float32, shape=[None, n_actions], name="tf_y")
 tf_epr = tf.placeholder(dtype=tf.float32, shape=[None, 1], name="tf_epr")
 
 # tf reward processing (need tf_discounted_epr for policy gradient wizardry)
-tf_discounted_epr = tf_discount_rewards(tf_epr)
-tf_mean, tf_variance = tf.nn.moments(tf_discounted_epr, [0], shift=None, name="reward_moments")
-tf_discounted_epr -= tf_mean
-tf_discounted_epr /= tf.sqrt(tf_variance + 1e-6)
+#tf_discounted_epr = tf_discount_rewards(tf_epr)
+tf_mean, tf_variance = tf.nn.moments(tf_epr, [0], shift=None, name="reward_moments")
+tf_epr -= tf_mean
+tf_epr /= tf.sqrt(tf_variance + 1e-6)
+
+
+
 
 # tf optimizer op
 tf_aprob = tf_policy_forward(tf_x)
 loss = tf.nn.l2_loss(tf_y - tf_aprob)
 optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=decay)
-tf_grads = optimizer.compute_gradients(loss, var_list=tf.trainable_variables(), grad_loss=tf_discounted_epr)
+tf_grads = optimizer.compute_gradients(loss, var_list=tf.trainable_variables(), grad_loss=tf_epr)
 train_op = optimizer.apply_gradients(tf_grads)
 
 # tf graph initialization
@@ -123,27 +133,43 @@ while True:
     reward_sum += reward
 
     # record game history
-    if len(rs) < MAX_MEMORY_SIZE:
-        xs.append(x)
-        ys.append(label)
-        rs.append(reward)
-    else:
-        xs.pop(0)
-        ys.pop(0)
-        rs.pop(0)
+   # if len(rs) < MAX_MEMORY_SIZE:
+    #    xs.append(x)
+     #   ys.append(label)
+      #  rs.append(reward)
+    #else:
+     #   xs.pop(0)
+      #  ys.pop(0)
+       # rs.pop(0)
 
-        xs.append(x)
-        ys.append(label)
-        rs.append(reward)
+    xs.append(x)
+    ys.append(label)
+    rs.append(reward)
 
     if done:
         # update running reward
+
         running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
 
-        if episode_number % 10:
+        if episode_number % 2:
+            rs = discount_rewards(rs)
+
+            excess = len(rs) - MAX_MEMORY_SIZE
+            if excess < 0:
+                excess = 0
+            if excess > 0:
+                for i in range(excess):
+                    lowest = np.argmin(rs.abs())
+                    rs.pop(lowest)
+                    xs.pop(lowest)
+                    ys.pop(lowest)
+
+
+
             x_t = np.vstack(xs)
             r_t = np.vstack(rs)
             y_t = np.vstack(ys)
+
             # parameter update
             feed = {tf_x: np.vstack(xs), tf_epr: np.vstack(rs), tf_y: np.vstack(ys)}
             _ = sess.run(train_op, feed)
